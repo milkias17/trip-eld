@@ -2,6 +2,7 @@ import copy
 from datetime import datetime, time, timedelta
 from typing import List, Literal, Tuple, Dict, Any, Type
 from django.utils import duration
+from django.utils.regex_helper import next_char
 from openrouteservice import convert
 
 from typing import TypedDict, List, Dict, Optional, Tuple, Any
@@ -347,6 +348,12 @@ class Transformer:
     def coord_for_waypoint(self, idx: int):
         return self.coords[idx]
 
+    def seconds_to_thresholds(self):
+        t_to_8h = max(0.0, BREAK_AFTER_DRIVE - self.consecutive_driving)
+        t_to_11h = max(0.0, DRIVE_LIMIT - self.cumulative_driving)
+        t_to_cycle = max(0.0, CYCLE_DURATION - self.total_cycle_on_duty)
+        return t_to_8h, t_to_11h, t_to_cycle
+
     def transform(self):
         for seg_idx, seg in enumerate(self.route.get("segments", [])):
             seg_distance = float(seg.get("distance", 0.0))
@@ -370,103 +377,108 @@ class Transformer:
                     )
                     continue
 
-                needs_rest = (self.cumulative_driving + step_duration) >= DRIVE_LIMIT
-                needs_30m_break = (
-                    self.consecutive_driving + step_duration
-                ) >= BREAK_AFTER_DRIVE
-                is_over_cycle = (
-                    self.total_cycle_on_duty + step_duration
-                ) >= CYCLE_DURATION
-
-                prev_coord = self.coord_for_waypoint(way_points[0])
-                start_idx = way_points[0]
-                end_idx = way_points[1]
-                segment_coords = self.coords[start_idx : end_idx + 1]
-
-                if needs_rest or needs_30m_break or is_over_cycle:
-                    if is_over_cycle:
-                        remaining_time = CYCLE_DURATION - self.total_cycle_on_duty
-                    elif needs_rest:
-                        remaining_time = DRIVE_LIMIT - self.cumulative_driving
-                    else:
-                        remaining_time = BREAK_AFTER_DRIVE - self.consecutive_driving
-
-                    if remaining_time > 0:
-                        duration_after_rest = step_duration - remaining_time
-                        remaining_distance = predict_distance(
-                            step_duration, step_distance, remaining_time
+                distance_covered_in_step = 0.0
+                while step_duration > 0.01 and step_distance > 0.01:
+                    to_break, to_rest, to_cycle = self.seconds_to_thresholds()
+                    to_fuel = max(0.0, DISTANCE_LIMIT - self.cumulative_distance)
+                    if to_fuel > 0:
+                        time_to_fuel = predict_duration(
+                            step_duration, step_distance, to_fuel
                         )
-                        distance_after_rest = step_distance - remaining_distance
-                        self.record_drive(
-                            remaining_time,
-                            remaining_distance,
-                            seg_idx,
-                            step_idx,
-                            instruction,
-                        )
-                        step_duration = duration_after_rest
-                        step_distance = distance_after_rest
-                        prev_coord = point_along_line(
-                            segment_coords, remaining_distance
-                        )
+                    elif to_fuel <= 0:
+                        time_to_fuel = 0.0
 
-                if is_over_cycle:
-                    self.record_break_or_rest(
-                        prev_coord,
-                        "rest",
-                        CYCLE_REST,
-                        "Weekly 70 hour limit reached",
+                    prev_coord = self.coord_for_waypoint(way_points[0])
+
+                    if to_break <= 0:
+                        self.record_break_or_rest(
+                            prev_coord,
+                            "break",
+                            BREAK_DURATION,
+                            "30-min break required (8h driving)",
+                        )
+                        continue
+                    if to_rest <= 0:
+                        self.record_break_or_rest(
+                            prev_coord,
+                            "rest",
+                            TEN_HOUR_REST,
+                            "10-hour rest required (11h driving limit would be exceeded)",
+                        )
+                        continue
+                    if to_cycle <= 0:
+                        self.record_break_or_rest(
+                            prev_coord, "rest", CYCLE_REST, "Weekly cycle limit reached"
+                        )
+                        continue
+
+                    if time_to_fuel <= 0:
+                        self.record_break_or_rest(
+                            prev_coord,
+                            "fuel",
+                            BREAK_DURATION,
+                            "Distance limit reached — fuel required",
+                        )
+                        continue
+
+                    start_idx = way_points[0]
+                    end_idx = way_points[1]
+                    segment_coords = self.coords[start_idx : end_idx + 1]
+
+                    next_cut = min(
+                        step_duration,
+                        to_break,
+                        to_rest,
+                        to_cycle,
                     )
-                elif needs_rest:
-                    self.record_break_or_rest(
-                        prev_coord,
-                        "rest",
-                        TEN_HOUR_REST,
-                        "10-hour rest required (11h driving limit would be exceeded)",
+                    to_move_distance = predict_distance(
+                        step_duration, step_distance, next_cut
                     )
-                elif needs_30m_break:
-                    self.record_break_or_rest(
-                        prev_coord,
-                        "break",
-                        BREAK_DURATION,
-                        "30-min break required (8h driving)",
+                    to_move_distance = max(0.0, min(to_move_distance, step_distance))
+                    self.record_drive(
+                        next_cut, to_move_distance, seg_idx, step_idx, instruction
                     )
+                    step_duration -= next_cut
+                    step_distance -= to_move_distance
+                    distance_covered_in_step += to_move_distance
 
-                needs_fueling = (
-                    self.cumulative_distance + step_distance
-                ) >= DISTANCE_LIMIT
-                if needs_fueling:
-                    remaining_distance = DISTANCE_LIMIT - self.cumulative_distance
-                    if remaining_distance > 0:
-                        distance_after_rest = step_distance - remaining_distance
-                        remaining_time = predict_duration(
-                            step_duration, step_distance, remaining_distance
-                        )
-                        duration_after_rest = step_duration - remaining_time
-                        self.record_drive(
-                            remaining_time,
-                            remaining_distance,
-                            seg_idx,
-                            step_idx,
-                            instruction,
-                        )
-                        step_duration = duration_after_rest
-                        step_distance = distance_after_rest
-                        prev_coord = point_along_line(
-                            segment_coords,
-                            remaining_distance,
-                        )
-
-                    self.record_break_or_rest(
-                        prev_coord,
-                        "fuel",
-                        BREAK_DURATION,
-                        "1,000 miles has been reached, truck needs fueling",
+                    prev_coord = point_along_line(
+                        segment_coords, distance_covered_in_step
                     )
 
-                self.record_drive(
-                    step_duration, step_distance, seg_idx, step_idx, instruction
-                )
+                    CLOSE = 1.0
+                    if abs(next_cut - time_to_fuel) <= CLOSE:
+                        self.record_break_or_rest(
+                            prev_coord,
+                            "fuel",
+                            BREAK_DURATION,
+                            "1,000 miles has been reached, truck needs fueling",
+                        )
+                        continue
+                    if abs(next_cut - to_break) <= CLOSE:
+                        self.record_break_or_rest(
+                            prev_coord,
+                            "break",
+                            BREAK_DURATION,
+                            "30-min break required (8h driving)",
+                        )
+                        continue
+                    if abs(next_cut - to_rest) <= CLOSE:
+                        self.record_break_or_rest(
+                            prev_coord,
+                            "rest",
+                            TEN_HOUR_REST,
+                            "10-hour rest required (11h driving limit would be exceeded)",
+                        )
+                        continue
+                    if abs(next_cut - to_cycle) <= CLOSE:
+                        self.record_break_or_rest(
+                            prev_coord,
+                            "rest",
+                            CYCLE_REST,
+                            "Weekly 70 hour limit reached",
+                        )
+                        continue
 
         travel_seconds = float(self.route.get("summary", {}).get("duration", 0.0))
         total_stop_seconds = sum(s["duration_seconds"] for s in self.stops)

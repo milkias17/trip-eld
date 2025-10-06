@@ -39,7 +39,7 @@ class TripPlannerView(generics.CreateAPIView):
             routing_params["pickup_coords"],
             routing_params["dropoff_coords"],
         )
-        return ors_client.directions(coords)
+        return ors_client.directions(coords, profile="driving-hgv")
 
     def _geocode_single_stop(
         self, ors_client: ors.Client, stop: StopEvent

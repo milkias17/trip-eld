@@ -30,7 +30,10 @@ ORS_API_KEY = env.str("ORS_API_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+if DEBUG:
+    ALLOWED_HOSTS = []
+else:
+    ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
 
 
 # Application definition
@@ -47,7 +50,8 @@ INSTALLED_APPS = [
     "core",
 ]
 
-CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]
+# CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]
+CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_HOSTS")
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
