@@ -28,13 +28,14 @@ SECRET_KEY = "django-insecure-!94azpu7bxiv6j$e^*-ye#++w)h5xp1y@g4j0qi=e)m9pmtz9l
 ORS_API_KEY = env.str("ORS_API_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env.bool("DEBUG", default=False)
 
 if DEBUG:
     ALLOWED_HOSTS = []
 else:
     ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
 
+print(ALLOWED_HOSTS)
 
 # Application definition
 
