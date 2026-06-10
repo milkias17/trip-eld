@@ -1,11 +1,6 @@
 import type { Position } from 'geojson';
 import { type LatLngTuple } from 'leaflet';
 
-type DMarker = {
-  position: LatLngTuple,
-  type: "rest"
-}
-
 type DStops = {
   type: "break" | "rest" | "service" | "fuel";
   duration_seconds: number;

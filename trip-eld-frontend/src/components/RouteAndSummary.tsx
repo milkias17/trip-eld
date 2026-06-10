@@ -236,7 +236,6 @@ export const RouteAndSummary: React.FC<RouteAndSummaryProps> = ({ coordinates: c
             <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 text-sm">
               <p className="text-xs text-gray-400 mb-2">Mandatory Stops (preview)</p>
 
-              {/* Compact preview (first 3 stops) */}
               <ul className="space-y-2">
                 {directions.stops.slice(0, 3).map((stop, idx) => (
                   <li key={idx} className="flex items-center justify-between">

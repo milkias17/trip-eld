@@ -1,6 +1,6 @@
 import type { LatLngTuple } from "leaflet";
-import type { Data } from "./lib/types";
-import data from "./assets/sampleData.json";
+import type { Data } from "../lib/types";
+import data from "../assets/sampleData.json";
 
 const sampleData = (data as any) as Data;
 
