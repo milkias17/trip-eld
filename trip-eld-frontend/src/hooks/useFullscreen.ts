@@ -1,7 +1,7 @@
 import { useRef, useCallback, useState, useEffect, type RefObject } from 'react';
 
 export interface FullscreenHook {
-  elementRef: RefObject<HTMLElement>;
+  elementRef: RefObject<HTMLElement | null>;
   isFullscreen: boolean;
   toggleFullscreen: () => void;
 }
@@ -26,7 +26,7 @@ const getFullscreenMethods = (element: HTMLElement | Document): FullscreenMethod
 };
 
 const useFullscreen = (): FullscreenHook => {
-  const elementRef = useRef<HTMLElement>(null);
+  const elementRef = useRef<HTMLElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
   const toggleFullscreen = useCallback(() => {

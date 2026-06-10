@@ -1,14 +1,13 @@
-import { Truck, MapPin, Clock, Loader2, ListOrdered } from "lucide-react";
+import { Truck, Clock, Loader2, ListOrdered } from "lucide-react";
 import { Card, InputGroup, ProgressBar } from "./ui-helpers";
 import type { Inputs } from "../lib/types";
-import { useState, type ChangeEvent } from "react";
+import { useState } from "react";
 import { LocationSearchInput } from "./LocationSearchInput";
-import type { LatLngTuple } from "leaflet";
 import type { Feature, GeoJsonProperties, Point, Position } from "geojson";
 
 type Props = {
   inputs: Inputs;
-  handleChange: (name: "currentLocation" | "dropoffLocation" | "pickupLocation", coordinates: Position | null | undefined) => void;
+  handleChange: (name: "currentLocation" | "dropoffLocation" | "pickupLocation" | "cycleUsedHours", coordinates: Position | number | null | undefined) => void;
   calculateTrip: () => void;
   reset: () => void;
   isLoading: boolean;
@@ -50,7 +49,7 @@ export const TripInputForm: React.FC<Props> = ({ errorText, inputs, handleChange
           min={0}
           max={70}
           value={inputs.cycleUsedHours}
-          onChange={(e) => handleChange("cycleUsedHours", e.target.value)}
+          onChange={(e) => handleChange("cycleUsedHours", parseFloat(e.target.value) || 0)}
           placeholder="e.g., 15"
           icon={Clock}
         />

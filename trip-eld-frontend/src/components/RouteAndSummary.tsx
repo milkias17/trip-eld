@@ -1,14 +1,14 @@
 // @ts-ignore
 import polyline from '@mapbox/polyline';
-import { MapPin, Minimize, Maximize, Layers, Clock, Car } from "lucide-react";
+import { MapPin, Minimize, Maximize, Layers, Clock } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, Tooltip, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap } from 'react-leaflet';
 import type { FullscreenHook } from "../hooks/useFullscreen";
 import useFullscreen from "../hooks/useFullscreen";
 import { secondsToHourString, toMiles, toHour } from "../lib/utils";
 import { FullscreenHandler } from "./FullscreenHandler";
 import { Card, MetricCard, ProgressBar } from "./ui-helpers";
-import type { Directions, Results } from '../lib/types';
+import type { Directions } from '../lib/types';
 import type { LatLngExpression, LatLngTuple } from 'leaflet';
 import L from 'leaflet';
 import ELDTimeline from './ELDLogSheets';

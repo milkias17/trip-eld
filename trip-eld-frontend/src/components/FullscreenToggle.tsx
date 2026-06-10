@@ -1,4 +1,3 @@
-import React from 'react';
 import useFullscreen from '../hooks/useFullscreen';
 import './FullscreenToggle.css';
 
@@ -8,7 +7,7 @@ function FullscreenToggle() {
   return (
     <div
       className={`fullscreen-container ${isFullscreen ? 'is-fullscreen' : ''}`}
-      ref={elementRef}
+      ref={elementRef as React.RefObject<HTMLDivElement>}
     >
       <h2>Element to Toggle Fullscreen (TypeScript)</h2>
       <p>Click the button to make this entire box fill the screen.</p>

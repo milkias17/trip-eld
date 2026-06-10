@@ -1,7 +1,7 @@
-import React, { useState, useCallback, type ChangeEvent } from 'react';
+import React, { useState } from 'react';
 import { Truck, MapPin, Loader2, Info } from 'lucide-react';
 import "./App.css";
-import type { Data, Inputs, Results } from './lib/types';
+import type { Data, Inputs } from './lib/types';
 import { RouteAndSummary } from './components/RouteAndSummary';
 import { TripInputForm } from './components/TripInputForm';
 import { useMutation } from '@tanstack/react-query';
@@ -23,7 +23,7 @@ const App: React.FC = () => {
   const [customError, setCustomError] = useState("");
 
 
-  const { mutate, isPending, error } = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: async () => {
       const response = await fetch(`${API_URL}/report/`, {
         method: "POST",
@@ -82,16 +82,16 @@ const App: React.FC = () => {
     mutate();
   }
 
-  const handleChange = (name: "currentLocation" | "dropoffLocation" | "pickupLocation" | "cycleUsedHours", coordinates: Position | undefined | null) => {
+  const handleChange = (name: "currentLocation" | "dropoffLocation" | "pickupLocation" | "cycleUsedHours", coordinates: Position | number | undefined | null) => {
     if (name !== "cycleUsedHours") {
       setInputs(prev => ({
         ...prev,
-        [name]: coordinates
+        [name]: coordinates as Position | null
       }));
     } else {
       setInputs(prev => ({
         ...prev,
-        cycleUsedHours: coordinates != null ? coordinates : 0
+        cycleUsedHours: typeof coordinates === 'number' ? coordinates : 0
       }))
     }
   };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Search, X, MapPin } from "lucide-react";
-import type { GeoJSON, Point, Position } from "geojson";
+import type { Point, Position } from "geojson";
 import { useQuery } from "@tanstack/react-query";
 import { API_KEY } from "../lib/constants";
 

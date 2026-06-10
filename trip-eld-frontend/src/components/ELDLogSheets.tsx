@@ -6,24 +6,6 @@ export type ELDTimelineProps = {
   data: ELDLog[];
 };
 
-function toSeconds(date: string | Date) {
-  const dateObj = typeof date !== "string" ? date : new Date(date);
-
-  const hours = dateObj.getHours();
-  const minutes = dateObj.getMinutes();
-  const seconds = dateObj.getSeconds();
-  const milliseconds = dateObj.getMilliseconds();
-
-  const totalSeconds = (
-    (hours * 3600) +
-    (minutes * 60) +
-    seconds +
-    (milliseconds / 1000)
-  );
-
-  return totalSeconds;
-}
-
 function secToHms(seconds: number): string {
   const s = Math.floor(seconds % 60);
   const m = Math.floor((seconds % 3600) / 60);
