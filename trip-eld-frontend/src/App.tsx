@@ -40,12 +40,14 @@ const App: React.FC = () => {
       })
       if (!response.ok) {
         const json = await response.json();
-        throw new Error(`Request failed ${response.status}: ${JSON.stringify(json, null, 2)}`)
+        const errorMessage = json?.error || json?.detail || JSON.stringify(json);
+        throw new Error(errorMessage)
       }
       const json = await response.json();
       return json as Data;
     },
     onSuccess: (data) => {
+      setCustomError("");
       const stops = data.directions.stops.map((stop) => ({
         ...stop,
         location: stop.location.reverse() as LatLngTuple
@@ -58,6 +60,9 @@ const App: React.FC = () => {
     },
     onError: (err) => {
       console.error(err);
+      // Extract user-friendly message from backend error response
+      const message = err instanceof Error ? err.message : "An unexpected error occurred";
+      setCustomError(message);
     }
   })
 

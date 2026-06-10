@@ -39,7 +39,9 @@ class TripPlannerView(generics.CreateAPIView):
             routing_params["pickup_coords"],
             routing_params["dropoff_coords"],
         )
-        return ors_client.directions(coords, profile="driving-hgv")
+        return ors_client.directions(
+            coords, profile="driving-hgv", radiuses=[2000, 2000, 2000]
+        )
 
     def _geocode_single_stop(
         self, ors_client: ors.Client, stop: StopEvent
@@ -98,7 +100,23 @@ class TripPlannerView(generics.CreateAPIView):
                 "dropoff_coords": dropoff_coords,
                 "current_cycle_used": serializer.validated_data["current_cycle_used"],
             }
-            directions = self.get_directions(routing_params)
+            try:
+                directions = self.get_directions(routing_params)
+            except exceptions.ApiError as e:
+                # ApiError is raised as ApiError(status_code, body_dict)
+                error_data = {}
+                if hasattr(e, 'args') and len(e.args) > 1:
+                    error_data = e.args[1]
+                error_message = error_data.get('error', {}).get('message', str(e))
+                return Response(
+                    {"error": error_message},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            except Exception as e:
+                return Response(
+                    {"error": f"Route planning failed: {str(e)}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
             pprint.pprint(directions)
             transformer = Transformer(
                 directions, routing_params["current_cycle_used"], request_timestamp
