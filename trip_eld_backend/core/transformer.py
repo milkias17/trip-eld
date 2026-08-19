@@ -1,8 +1,6 @@
 import copy
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Literal, Tuple, Dict, Any, Type
-from django.utils import duration
-from django.utils.regex_helper import next_char
 from openrouteservice import convert
 
 from typing import TypedDict, List, Dict, Optional, Tuple, Any
@@ -239,8 +237,13 @@ def add_total_counts(event_type: ELDEventType, eld: ELDLog, duration_seconds: in
 
 class Transformer:
     def __init__(
-        self, directions: DirectionsDict, used_cycle: int, request_timestamp: datetime
+        self,
+        directions: DirectionsDict,
+        used_cycle: int,
+        request_timestamp: datetime = None,
     ) -> None:
+        if request_timestamp is None:
+            request_timestamp = datetime.now(timezone.utc)
         self.initial_time = snap_to_next_day(request_timestamp)
         self.directions = directions
         self.used_cycle = used_cycle
@@ -273,8 +276,6 @@ class Transformer:
         ]
         cur_total = 0
         for event in self.hos_events:
-            n = len(elds) - 1
-
             event_type = None
             if event["type"] in ["break", "rest"]:
                 event_type = "off_duty"
@@ -283,65 +284,71 @@ class Transformer:
             elif event["type"] == "drive":
                 event_type = "drive"
 
-            log_events = elds[n]["log_events"]
+            event_remark = event.get("reason", None)
+            remaining_seconds = event["duration_seconds"]
 
-            if does_adding_seconds_cross_day(
-                elds[n]["start_time"], cur_total + event["duration_seconds"]
-            ):
-                splittable_seconds = seconds_until_midnight(
-                    elds[n]["start_time"], cur_total
-                )
-                splitted_event = event["duration_seconds"] > splittable_seconds
-                new_log_events: List[ELDEvent] = []
-                new_start_date = datetime.combine(
-                    elds[n]["start_time"].date() + timedelta(days=1),
-                    datetime.min.time(),
-                    tzinfo=self.initial_time.tzinfo,
-                )
-                new_eld: ELDLog = {
-                    "start_time": new_start_date,
-                    "log_events": new_log_events,
-                    "total_driving": 0,
-                    "total_off_duty": 0,
-                    "total_on_duty": 0,
-                }
-                if splitted_event:
-                    ev_seconds = event["duration_seconds"] - splittable_seconds
+            while remaining_seconds > 0:
+                n = len(elds) - 1
+                day_start = elds[n]["start_time"]
+
+                if not does_adding_seconds_cross_day(
+                    day_start, cur_total + remaining_seconds
+                ):
                     add_event(
-                        log_events,
+                        elds[n]["log_events"],
+                        event_type,
+                        cur_total,
+                        remaining_seconds,
+                        event_remark,
+                    )
+                    add_total_counts(event_type, elds[n], remaining_seconds)
+                    cur_total += remaining_seconds
+                    remaining_seconds = 0
+                    break
+
+                # The event crosses the next midnight; split off the portion
+                # that fits in the current day and continue with the remainder.
+                splittable_seconds = seconds_until_midnight(day_start, cur_total)
+
+                if remaining_seconds > splittable_seconds:
+                    add_event(
+                        elds[n]["log_events"],
                         event_type,
                         cur_total,
                         splittable_seconds,
-                        event.get("reason", None),
+                        event_remark,
                     )
                     add_total_counts(event_type, elds[n], splittable_seconds)
+                    remaining_seconds -= splittable_seconds
+                else:
+                    # Event ends exactly at midnight: it belongs entirely to
+                    # the current day, and the next day starts with a clean
+                    # slate.
                     add_event(
-                        new_log_events,
+                        elds[n]["log_events"],
                         event_type,
-                        0,
-                        ev_seconds,
-                        event.get("reason", None),
+                        cur_total,
+                        remaining_seconds,
+                        event_remark,
                     )
-                    add_total_counts(event_type, new_eld, ev_seconds)
+                    add_total_counts(event_type, elds[n], remaining_seconds)
+                    remaining_seconds = 0
 
-                elds.append(new_eld)
-                n = len(elds) - 1
+                new_start_date = datetime.combine(
+                    day_start.date() + timedelta(days=1),
+                    datetime.min.time(),
+                    tzinfo=self.initial_time.tzinfo,
+                )
+                elds.append(
+                    {
+                        "start_time": new_start_date,
+                        "log_events": [],
+                        "total_driving": 0,
+                        "total_off_duty": 0,
+                        "total_on_duty": 0,
+                    }
+                )
                 cur_total = 0
-                if splitted_event:
-                    cur_total = ev_seconds
-                    continue
-                log_events = new_log_events
-
-            add_event(
-                log_events,
-                event_type,
-                cur_total,
-                event["duration_seconds"],
-                event.get("reason", None),
-            )
-
-            add_total_counts(event_type, elds[n], event["duration_seconds"])
-            cur_total += event["duration_seconds"]
 
         return elds
 

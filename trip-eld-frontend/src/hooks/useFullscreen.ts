@@ -12,16 +12,34 @@ interface FullscreenMethods {
   element: Element | null;
 }
 
+interface FullscreenDocument {
+  exitFullscreen?: () => Promise<void>;
+  webkitExitFullscreen?: () => Promise<void>;
+  mozCancelFullScreen?: () => Promise<void>;
+  msExitFullscreen?: () => Promise<void>;
+  fullscreenElement?: Element | null;
+  webkitFullscreenElement?: Element | null;
+  mozFullScreenElement?: Element | null;
+  msFullscreenElement?: Element | null;
+}
+
+interface FullscreenElement {
+  requestFullscreen?: (options?: FullscreenOptions) => Promise<void>;
+  webkitRequestFullscreen?: (options?: FullscreenOptions) => Promise<void>;
+  mozRequestFullScreen?: (options?: FullscreenOptions) => Promise<void>;
+  msRequestFullscreen?: (options?: FullscreenOptions) => Promise<void>;
+}
+
 const getFullscreenMethods = (element: HTMLElement | Document): FullscreenMethods => {
   const isDocument = element === document;
 
-  const doc = document as any;
-  const elem = element as any;
+  const doc = document as FullscreenDocument;
+  const elem = element as unknown as FullscreenElement;
 
   return {
     request: isDocument ? undefined : (elem.requestFullscreen || elem.webkitRequestFullscreen || elem.mozRequestFullScreen || elem.msRequestFullscreen),
     exit: doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen,
-    element: doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement,
+    element: doc.fullscreenElement ?? doc.webkitFullscreenElement ?? doc.mozFullScreenElement ?? doc.msFullscreenElement ?? null,
   };
 };
 

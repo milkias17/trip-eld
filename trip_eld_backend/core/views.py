@@ -1,6 +1,4 @@
 from django.utils import timezone
-from rest_framework.decorators import api_view
-import pprint
 from rest_framework.response import Response
 from rest_framework import status, generics
 
@@ -117,7 +115,6 @@ class TripPlannerView(generics.CreateAPIView):
                     {"error": f"Route planning failed: {str(e)}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
-            pprint.pprint(directions)
             transformer = Transformer(
                 directions, routing_params["current_cycle_used"], request_timestamp
             )

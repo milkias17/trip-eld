@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Tuple
 
 from core.transformer import (
@@ -19,6 +20,7 @@ def make_directions(
     """
     total_duration = sum(float(s.get("duration", 0.0)) for s in steps)
     return {
+        "bbox": [-122.0, 37.0, -121.0, 38.0],
         "routes": [
             {
                 "summary": {
@@ -92,7 +94,7 @@ def test_no_hos_needed():
     drive_events = [e for e in out["hos_events"] if e["type"] == "drive"]
     assert len(drive_events) == 2
     assert out["itinerary_total_seconds"] == int(
-        out["routes"][0]["summary"]["duration"]
+        directions["routes"][0]["summary"]["duration"]
     )
 
 
@@ -101,9 +103,9 @@ def test_insert_30min_break_before_step_exceeding_8h():
     Step 1: 7.5 hours
     Step 2: 1 hour -> would push cumulative driving over 8h (trigger 30-min break)
     Expect:
-      - a single 'break' stop inserted before step 2
+      - a single 'break' stop inserted exactly when cumulative driving hits 8h
       - itinerary total includes the 30-min break
-      - break event occurs before the second drive event in hos_events
+      - driving continues after the break
     """
     step1 = {
         "distance": 100000,
@@ -128,25 +130,31 @@ def test_insert_30min_break_before_step_exceeding_8h():
     assert len(breaks) == 1, f"Expected one 30-min break; found {len(breaks)}"
     assert breaks[0]["duration_seconds"] == BREAK_DURATION
 
-    orig = int(out["routes"][0]["summary"]["duration"])
+    orig = int(directions["routes"][0]["summary"]["duration"])
     assert out["itinerary_total_seconds"] == orig + BREAK_DURATION
 
     hos = out["hos_events"]
     idx_break = next(i for i, e in enumerate(hos) if e["type"] == "break")
-    drive_indices = [i for i, e in enumerate(hos) if e["type"] == "drive"]
-    assert len(drive_indices) >= 2
-    assert idx_break < drive_indices[1]
+    drive_before_break = sum(
+        e["duration_seconds"] for e in hos[:idx_break] if e["type"] == "drive"
+    )
+    assert drive_before_break == 8 * 3600, (
+        f"Break should be inserted at exactly 8h of driving, got {drive_before_break}"
+    )
+    drive_after_break = sum(
+        e["duration_seconds"] for e in hos[idx_break:] if e["type"] == "drive"
+    )
+    assert drive_after_break == 0.5 * 3600
 
 
 def test_insert_10h_rest_before_step_exceeding_11h():
     """
     Step 1: 10 hours
-    Step 2: 2 hours -> would push cumulative driving over 11h => require 10h rest at previous step boundary
+    Step 2: 2 hours -> would push cumulative driving over 11h => require 10h rest
     Expect:
-      - a 'rest' stop inserted prior to step 2
+      - a 'rest' stop inserted exactly when cumulative driving hits 11h
       - the rest duration equals TEN_HOUR_REST
-      - rest appears before the second drive
-      - after rest, the next drive event's duration equals step2 duration
+      - after rest, driving continues from a fresh clock
     """
     step1 = {
         "distance": 360000,
@@ -171,14 +179,29 @@ def test_insert_10h_rest_before_step_exceeding_11h():
     assert len(rests) == 1, "Expected one 10-hour rest inserted"
     assert rests[0]["duration_seconds"] == TEN_HOUR_REST
 
+    breaks = [s for s in out["stops"] if s["type"] == "break"]
+    assert len(breaks) == 1, "Expected one 30-min break before the 11h limit"
+
     hos = out["hos_events"]
     rest_idx = next(i for i, e in enumerate(hos) if e["type"] == "rest")
-    drive_indices = [i for i, e in enumerate(hos) if e["type"] == "drive"]
-    assert drive_indices and len(drive_indices) >= 2
-    assert rest_idx < drive_indices[1]
+    drive_before_rest = sum(
+        e["duration_seconds"] for e in hos[:rest_idx] if e["type"] == "drive"
+    )
+    assert drive_before_rest == 11 * 3600, (
+        f"Rest should be inserted at exactly 11h of driving, got {drive_before_rest}"
+    )
+    drive_after_rest = sum(
+        e["duration_seconds"] for e in hos[rest_idx:] if e["type"] == "drive"
+    )
+    assert drive_after_rest == 1 * 3600, (
+        f"Expected 1h of driving after the rest, got {drive_after_rest}"
+    )
 
-    second_drive_event = hos[drive_indices[1]]
-    assert second_drive_event["duration_seconds"] == int(step2["duration"])
+    assert out["itinerary_total_seconds"] == (
+        int(directions["routes"][0]["summary"]["duration"])
+        + BREAK_DURATION
+        + TEN_HOUR_REST
+    )
 
 
 def test_service_zero_distance_step_inserts_service_and_advances_elapsed():
@@ -216,8 +239,110 @@ def test_service_zero_distance_step_inserts_service_and_advances_elapsed():
     assert len(services) == 1, "Expected exactly one service stop"
     assert services[0]["duration_seconds"] == PICKUP_DROPOFF_SERVICE
 
-    orig = int(out["routes"][0]["summary"]["duration"])
+    orig = int(directions["routes"][0]["summary"]["duration"])
     assert out["itinerary_total_seconds"] == orig + PICKUP_DROPOFF_SERVICE
+
+
+def test_eld_event_ending_exactly_at_midnight_stays_on_starting_day():
+    """
+    An event that ends exactly at midnight must be attributed to the day it
+    started in; the following day starts with a clean slate (regression test
+    for a bug where such events vanished from day 1 and were shifted to day 2).
+    """
+    step = {
+        "distance": 1000,
+        "duration": 3600,
+        "type": 1,
+        "instruction": "Drive to midnight",
+        "way_points": [0, 1],
+    }
+    directions = make_directions([step], way_points=[0, 1])
+
+    start = datetime(2026, 8, 14, 23, 0, 0, tzinfo=timezone.utc)
+    t = Transformer(directions, used_cycle=0, request_timestamp=start)
+    out = t.transform()
+
+    assert len(out["eld"]) == 2
+    day1, day2 = out["eld"]
+
+    assert day1["total_driving"] == 3600
+    assert day1["total_off_duty"] == 0
+    assert len(day1["log_events"]) == 1
+    assert day1["log_events"][0]["event_type"] == "drive"
+    assert day1["log_events"][0]["duration_seconds"] == 3600
+
+    assert day2["total_driving"] == 0
+    assert day2["log_events"] == []
+
+
+def test_eld_event_crossing_midnight_is_split_across_days():
+    """
+    An event crossing midnight must be split so that day 1 holds the portion
+    before midnight and day 2 holds the portion after, with totals preserved.
+    """
+    step = {
+        "distance": 1000,
+        "duration": 7200,
+        "type": 1,
+        "instruction": "Drive across midnight",
+        "way_points": [0, 1],
+    }
+    directions = make_directions([step], way_points=[0, 1])
+
+    start = datetime(2026, 8, 14, 23, 0, 0, tzinfo=timezone.utc)
+    t = Transformer(directions, used_cycle=0, request_timestamp=start)
+    out = t.transform()
+
+    assert len(out["eld"]) == 2
+    day1, day2 = out["eld"]
+
+    assert day1["total_driving"] == 3600
+    assert day2["total_driving"] == 3600
+    assert day2["log_events"][0]["event_type"] == "drive"
+    assert day2["log_events"][0]["time_from_start_seconds"] == 0
+    assert day2["log_events"][0]["duration_seconds"] == 3600
+
+
+def test_eld_event_longer_than_a_day_is_split_across_multiple_days():
+    """
+    An event longer than 24h (e.g. a 34h cycle rest) must be split across every
+    midnight it spans; no single day may exceed 24h of events.
+    """
+    directions = make_directions([], way_points=[0, 1])
+    directions["routes"][0]["segments"] = []
+    directions["routes"][0]["summary"] = {"distance": 0, "duration": 0}
+
+    # Drive a little, then trigger a weekly cycle rest (34h) shortly before
+    # midnight so the rest spans multiple day boundaries.
+    start = datetime(2026, 8, 14, 22, 30, 0, tzinfo=timezone.utc)
+    rest_event = {
+        "type": "rest",
+        "duration_seconds": 34 * 3600,
+        "reason": "Weekly 70 hour limit reached",
+        "location": [0.0, 0.0],
+        "time_from_start_seconds": 0,
+    }
+    t = Transformer(directions, used_cycle=0, request_timestamp=start)
+    t.hos_events = [rest_event]
+    out = t.transform()
+
+    assert len(out["eld"]) == 3, f"34h rest should span 3 days, got {len(out['eld'])}"
+
+    totals = []
+    for day in out["eld"]:
+        day_sum = (
+            day["total_driving"] + day["total_off_duty"] + day["total_on_duty"]
+        )
+        assert day_sum <= 24 * 3600, f"Day exceeds 24h: {day_sum}"
+        totals.append(day_sum)
+        assert all(
+            ev["duration_seconds"] <= 24 * 3600 for ev in day["log_events"]
+        )
+
+    assert sum(totals) == 34 * 3600
+    assert totals[0] == 1.5 * 3600
+    assert totals[1] == 24 * 3600
+    assert totals[2] == (34 - 1.5 - 24) * 3600
 
 
 def test_seconds_elapsed_increases_for_breaks_and_rests():
@@ -263,5 +388,5 @@ def test_seconds_elapsed_increases_for_breaks_and_rests():
 
     total_stop_durations = sum(s["duration_seconds"] for s in out["stops"])
     assert out["itinerary_total_seconds"] == int(
-        out["routes"][0]["summary"]["duration"]
+        directions["routes"][0]["summary"]["duration"]
     ) + int(total_stop_durations)

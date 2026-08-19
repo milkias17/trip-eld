@@ -1,7 +1,9 @@
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, ComponentType, ReactNode } from "react";
 import type { Inputs } from "../lib/types";
 
-export const MetricCard: React.FC<{ title: string; value: React.ReactNode; subtitle?: string; icon?: React.ComponentType<any>; }> = ({ title, value, subtitle, icon: Icon }) => (
+type IconType = ComponentType<{ className?: string }>;
+
+export const MetricCard: React.FC<{ title: string; value: ReactNode; subtitle?: string; icon?: IconType; }> = ({ title, value, subtitle, icon: Icon }) => (
   <div className="bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-700">
     <div className="flex items-center justify-between">
       <div>
@@ -30,7 +32,7 @@ export const ProgressBar: React.FC<{ label: string; value: number; max?: number;
 };
 
 
-export const Card: React.FC<{ title: string; icon?: React.ComponentType<any>; children: React.ReactNode; className?: string; }> = ({ title, icon: Icon, children, className = '' }) => (
+export const Card: React.FC<{ title: string; icon?: IconType; children: ReactNode; className?: string; }> = ({ title, icon: Icon, children, className = '' }) => (
   <div className={`bg-gray-800 p-6 rounded-xl shadow-md border ${className}`}>
     <div className="flex items-center justify-between mb-4">
       <h2 className="text-lg font-bold text-indigo-300 flex items-center">
@@ -42,7 +44,7 @@ export const Card: React.FC<{ title: string; icon?: React.ComponentType<any>; ch
   </div>
 );
 
-export const InputGroup: React.FC<{ label: string; name: keyof Inputs; value: string | number; onChange: (e: ChangeEvent<HTMLInputElement>) => void; placeholder: string; icon: React.ComponentType<any>; type?: string; min?: number; max?: number; children?: React.ReactNode }> = ({ label, name, value, onChange, placeholder, icon: Icon, type = 'text', min = 0, max = 100 }) => (
+export const InputGroup: React.FC<{ label: string; name: keyof Inputs; value: string | number; onChange: (e: ChangeEvent<HTMLInputElement>) => void; placeholder: string; icon: IconType; type?: string; min?: number; max?: number; children?: ReactNode }> = ({ label, name, value, onChange, placeholder, icon: Icon, type = 'text', min = 0, max = 100 }) => (
   <div>
     <label htmlFor={name} className="block text-sm font-medium text-gray-300 mb-2">{label}</label>
     <div className="relative">

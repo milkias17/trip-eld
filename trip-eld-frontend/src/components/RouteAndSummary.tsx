@@ -1,4 +1,4 @@
-// @ts-ignore
+// @ts-expect-error @mapbox/polyline has no bundled type declarations
 import polyline from '@mapbox/polyline';
 import { MapPin, Minimize, Maximize, Layers, Clock } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";

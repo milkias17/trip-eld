@@ -17,7 +17,7 @@ function formatDateIso(iso: string | Date): string {
   try {
     const d = typeof iso === 'string' ? new Date(iso) : iso;
     return d.toLocaleString();
-  } catch (e) {
+  } catch {
     return String(iso);
   }
 }

@@ -23,10 +23,12 @@ function useDebounceValue<T>(value: T, delay = 500) {
   return debouncedValue;
 }
 
-type SearchResults = GeoJSON.FeatureCollection<
+type SearchFeature = GeoJSON.Feature<
   GeoJSON.Geometry,
   GeoJSON.GeoJsonProperties & { label?: string; id?: string | number }
 >;
+
+type SearchResults = GeoJSON.FeatureCollection<GeoJSON.Geometry, SearchFeature["properties"]>;
 
 export function LocationSearchInput({
   onLocationSelect,
@@ -86,27 +88,24 @@ export function LocationSearchInput({
     setInputValue(e.target.value);
     if (selectedLocation) {
       onLocationSelect(null);
-      onLocationSelect(null);
     }
     setSuppressAfterSelect(false);
   };
 
-  const chooseFeature = (feature: GeoJSON.Feature<Point, GeoJSON.GeoJsonProperties & { label?: string; id?: string | number }>) => {
+  const chooseFeature = (feature: SearchFeature) => {
     const label =
       (feature.properties && (feature.properties.label as string)) ||
       (feature.properties && (feature.properties.name as string)) ||
       "Selected place";
     setInputValue(label);
-    onLocationSelect(feature);
+    onLocationSelect(feature as GeoJSON.Feature<Point, GeoJSON.GeoJsonProperties>);
     setIsDropdownOpen(false);
     setSuppressAfterSelect(true);
     setHighlightIndex(-1);
-    onLocationSelect(feature);
   };
 
   const clear = () => {
     setInputValue("");
-    onLocationSelect(null);
     onLocationSelect(null);
     setIsDropdownOpen(false);
     setSuppressAfterSelect(false);
@@ -131,7 +130,7 @@ export function LocationSearchInput({
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (highlightIndex >= 0 && results?.features?.[highlightIndex]) {
-        chooseFeature(results.features[highlightIndex] as any);
+        chooseFeature(results.features[highlightIndex]);
       }
     } else if (e.key === "Escape") {
       setIsDropdownOpen(false);
@@ -208,7 +207,7 @@ export function LocationSearchInput({
                         aria-selected={isHighlighted}
                         onMouseEnter={() => setHighlightIndex(idx)}
                         onMouseLeave={() => setHighlightIndex(-1)}
-                        onClick={() => chooseFeature(feature as any)}
+                        onClick={() => chooseFeature(feature)}
                         className={`px-3 py-2 cursor-pointer flex items-start gap-3 transition-colors ${isHighlighted ? "bg-gray-800" : "hover:bg-gray-800"
                           }`}
                       >
