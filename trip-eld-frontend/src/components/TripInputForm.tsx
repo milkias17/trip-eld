@@ -32,14 +32,14 @@ export const TripInputForm: React.FC<Props> = ({ errorText, inputs, handleChange
       <div className="space-y-4">
         <LocationSearchInput inputValue={inputValues.currentLocation} setInputValue={(val) => setInputValues((prev) => ({ ...prev, currentLocation: val }))} value={inputs.currentLocation} onLocationSelect={getLocationSelect("currentLocation")} name="currentLocation" label="Current Location (Start)" placeholder="e.g., Los Angeles, CA" />
 
-        <LocationSearchInput inputValue={inputValues.pickupLocation} setInputValue={(val) => setInputValues((prev) => ({ ...prev, pickupLocation: val }))} value={inputs.pickupLocation} onLocationSelect={getLocationSelect("pickupLocation")} name="pickupLocation" label="Pickup Location" placeholder="e.g., Philadelphia, PA" />
+        <LocationSearchInput inputValue={inputValues.pickupLocation} setInputValue={(val) => setInputValues((prev) => ({ ...prev, pickupLocation: val }))} value={inputs.pickupLocation} onLocationSelect={getLocationSelect("pickupLocation")} name="pickupLocation" label="Pickup Location" placeholder="e.g., Phoenix, AZ" />
 
         <LocationSearchInput
           inputValue={inputValues.dropoffLocation}
           setInputValue={(val) => setInputValues((prev) => ({ ...prev, dropoffLocation: val }))}
           value={inputs.dropoffLocation}
           onLocationSelect={getLocationSelect("dropoffLocation")}
-          name="dropoffLocation" label="Dropoff Location" placeholder="e.g., Denver, CO" />
+          name="dropoffLocation" label="Dropoff Location" placeholder="e.g., Las Vegas, NV" />
 
 
         <InputGroup
